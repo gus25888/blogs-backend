@@ -5,7 +5,7 @@ Blogs backend app
 ## Iniciar
 
 ```sh
-npm clone https://github.com/gus25888/
+npm clone https://github.com/gus25888/blogs-backend
 npm install
 ```
 
