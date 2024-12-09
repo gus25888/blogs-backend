@@ -10,5 +10,6 @@ npm install
 ```
 
 Luego, crear un archivo .env en la raíz, con las siguientes variables:
-    MONGODB_URI
-    PORT
+
+- MONGODB_URI
+- PORT
