@@ -39,4 +39,36 @@ blogsRouter.post('/', async (request, response, next) => {
   }
 })
 
+blogsRouter.delete('/:id', async (request, response, next) => {
+  try {
+    if (!request.params.id) {
+      return response.status(400).end()
+    }
+    await Blog.findByIdAndDelete(request.params.id)
+    response.status(204).end()
+  } catch (exception) {
+    next(exception)
+  }
+})
+
+blogsRouter.patch('/:id', async (request, response, next) => {
+  try {
+    const { likes } = request.body
+
+    const result = await Blog.findByIdAndUpdate(
+      request.params.id,
+      { likes },
+      { new: true, runValidators: true, context: 'query' }
+    )
+
+    if (result) {
+      response.json(result)
+    }
+
+  } catch (exception) {
+    next(exception)
+  }
+
+})
+
 module.exports = blogsRouter

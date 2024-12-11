@@ -107,6 +107,50 @@ describe('creation of blogs', () => {
     })
 
 
+  describe('deletion of blog', async () => {
+    test('succeeds with status code 204 if id is valid', async () => {
+      const blogsBefore = await helper.blogsInDb()
+      const { id: idToUpdate, title } = blogsBefore[0]
+
+      await api
+        .delete(endpointTested + '/' + idToUpdate)
+        .expect(204)
+
+      const blogsAfter = await helper.blogsInDb()
+      assert(!blogsAfter.map(blog => blog.title).includes(title))
+
+      assert.strictEqual(blogsBefore.length - 1, blogsAfter.length)
+    })
+
+    test('fails with status code 404 if id is not sent', async () => {
+      await api
+        .delete(endpointTested + '/')
+        .expect(404)
+    })
+  })
+
+  describe('modification of blog', async () => {
+    test('update succeeds and adds 5 likes to a blog', async () => {
+      const blogsBefore = await helper.blogsInDb()
+      const { id: idToUpdate, likes: likesBefore } = blogsBefore[0]
+      const likes = likesBefore + 5
+
+      await api
+        .patch(endpointTested + '/' + idToUpdate)
+        .send({ likes })
+        .expect(200)
+
+      const blogsAfter = await helper.blogsInDb()
+      const blogUpdated = blogsAfter.filter(blog => blog.id === idToUpdate).at(0)
+      assert.strictEqual(blogUpdated.likes, likes)
+    })
+
+    test('not updated if id is not sent', async () => {
+      await api
+        .patch(endpointTested + '/')
+        .expect(404)
+    })
+  })
 })
 
 after(async () => {
