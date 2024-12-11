@@ -64,6 +64,49 @@ describe('creation of blogs', () => {
     assert(titlesList.includes('The Modern JavaScript Tutorial'))
   })
 
+  test('a blog without likes, would be equal to zero likes',
+    async () => {
+      const newBlogWithoutLikes = {
+        title: 'The Basics of Package.json in Node.js and npm',
+        author: 'Tierney Cyren',
+        url: 'https://nodesource.com/blog/the-basics-of-package-json-in-node-js-and-npm',
+      }
+
+      const result = await api
+        .post(endpointTested)
+        .send(newBlogWithoutLikes)
+
+      const { likes } = result.body
+      assert.strictEqual(likes, 0)
+    })
+
+  test('a blog without title or url, gets Bad Request response',
+    async () => {
+      const newBlogWithoutUrl = {
+        title: 'The Basics of Package.json in Node.js and npm',
+        author: 'Tierney Cyren',
+        likes: 2
+      }
+
+      await api
+        .post(endpointTested)
+        .send(newBlogWithoutUrl)
+        .expect(400)
+
+      const newBlogWithoutTitle = {
+        author: 'Tierney Cyren',
+        url: 'https://nodesource.com/blog/the-basics-of-package-json-in-node-js-and-npm',
+        likes: 2
+      }
+
+      await api
+        .post(endpointTested)
+        .send(newBlogWithoutTitle)
+        .expect(400)
+
+    })
+
+
 })
 
 after(async () => {
