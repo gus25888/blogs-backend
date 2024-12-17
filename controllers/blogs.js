@@ -3,7 +3,7 @@ const Blog = require('../models/blog')
 
 blogsRouter.get('/', async (request, response, next) => {
   try {
-    const result = await Blog.find({})
+    const result = await Blog.find({}).populate('user', { username: 1, name: 1, id: 1 })
     if (result) {
       response.json(result)
     } else {
@@ -16,20 +16,20 @@ blogsRouter.get('/', async (request, response, next) => {
 
 blogsRouter.post('/', async (request, response, next) => {
   try {
-    const { title, author, url, likes = 0 } = request.body
+    const { title, author, url, likes } = request.body
+    const user = request.user
 
-    if (!title) {
-      return response.status(400).send({ error: 'title is required' })
+    if (!user) {
+      return response.status(401).json({ error: 'token invalid' })
     }
+    const newBlog = new Blog({ title, author, url, likes, user: user.id })
+    const savedBlog = await newBlog.save()
 
-    if (!url) {
-      return response.status(400).send({ error: 'url is required' })
-    }
+    user.blogs = user.blogs.concat(savedBlog._id)
+    const result = await user.save()
 
-    const newBlog = new Blog({ title, author, url, likes })
-    const result = await newBlog.save()
-    if (result) {
-      response.status(201).json(result)
+    if (result && savedBlog) {
+      response.status(201).json(savedBlog)
     } else {
       response.status(404).end()
     }
@@ -44,8 +44,28 @@ blogsRouter.delete('/:id', async (request, response, next) => {
     if (!request.params.id) {
       return response.status(400).end()
     }
+
+    const user = request.user
+    if (!user) {
+      return response.status(401).json({ error: 'token invalid' })
+    }
+
+    const userIdSent = user.id
+    const blogFound = await Blog.findById(request.params.id)
+
+    if (!blogFound) {
+      return response.status(401).json({ error: 'id not found' })
+    }
+
+    const userIdBlog = blogFound.user
+
+    if (userIdSent.toString() !== userIdBlog.toString()) {
+      return response.status(403).send({ error: 'user must be the creator of the blog' })
+    }
+
     await Blog.findByIdAndDelete(request.params.id)
     response.status(204).end()
+
   } catch (exception) {
     next(exception)
   }

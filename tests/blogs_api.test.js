@@ -3,15 +3,25 @@ const assert = require('node:assert')
 const mongoose = require('mongoose')
 const supertest = require('supertest')
 
-const helper = require('./test_helper')
+const { testUser, listOfBlogs, blogsInDb, blogsPreparation } = require('./test_helper')
 const app = require('../app')
 const api = supertest(app)
 
+let sessionToken
+const getSessionToken = async () => {
+  const result = await api
+    .post('/api/login')
+    .send({ username: testUser.username, password: testUser.password })
+    .expect(200)
+    .expect('Content-Type', /application\/json/)
 
-beforeEach(helper.dbPreparation)
+  sessionToken = result.body.token
+}
 
 
 const endpointTested = '/api/blogs'
+
+beforeEach(blogsPreparation)
 
 describe('obtention of blogs', () => {
 
@@ -25,7 +35,7 @@ describe('obtention of blogs', () => {
   test('correct returned quantity', async () => {
     const response = await api.get(endpointTested)
 
-    assert.strictEqual(response.body.length, helper.listOfBlogs.length)
+    assert.strictEqual(response.body.length, listOfBlogs.length)
   })
 
   test('unique identifier name is "id"', async () => {
@@ -41,24 +51,25 @@ describe('obtention of blogs', () => {
 
 describe('creation of blogs', () => {
 
+  beforeEach(getSessionToken)
+
   test('a valid blog can be added', async () => {
     const newBlog = {
       title: 'The Modern JavaScript Tutorial',
       author: 'Ilya Kantor',
       url: 'https://javascript.info/',
       likes: 23696,
-      _id: '6758ec2c1515e2a7d27f1e90',
-      __v: 0
     }
 
     await api
       .post(endpointTested)
+      .auth(sessionToken, { type: 'bearer' })
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
 
-    const blogsList = await helper.blogsInDb()
-    assert.strictEqual(blogsList.length, helper.listOfBlogs.length + 1)
+    const blogsList = await blogsInDb()
+    assert.strictEqual(blogsList.length, listOfBlogs.length + 1)
 
     const titlesList = blogsList.map(blog => blog.title)
     assert(titlesList.includes('The Modern JavaScript Tutorial'))
@@ -74,7 +85,10 @@ describe('creation of blogs', () => {
 
       const result = await api
         .post(endpointTested)
+        .auth(sessionToken, { type: 'bearer' })
         .send(newBlogWithoutLikes)
+        .expect(201)
+        .expect('Content-Type', /application\/json/)
 
       const { likes } = result.body
       assert.strictEqual(likes, 0)
@@ -85,13 +99,15 @@ describe('creation of blogs', () => {
       const newBlogWithoutUrl = {
         title: 'The Basics of Package.json in Node.js and npm',
         author: 'Tierney Cyren',
-        likes: 2
+        likes: 2,
       }
 
       await api
         .post(endpointTested)
+        .auth(sessionToken, { type: 'bearer' })
         .send(newBlogWithoutUrl)
         .expect(400)
+        .expect('Content-Type', /application\/json/)
 
       const newBlogWithoutTitle = {
         author: 'Tierney Cyren',
@@ -101,56 +117,84 @@ describe('creation of blogs', () => {
 
       await api
         .post(endpointTested)
+        .auth(sessionToken, { type: 'bearer' })
         .send(newBlogWithoutTitle)
         .expect(400)
+        .expect('Content-Type', /application\/json/)
 
     })
 
+  test('a valid blog cannot be added, without session token', async () => {
+    const newBlog = {
+      title: 'git archive: cómo exportar un proyecto de Git',
+      author: 'Attlasian',
+      url: 'https://www.atlassian.com/es/git/tutorials/export-git-archive',
+      likes: 10,
+    }
 
-  describe('deletion of blog', async () => {
-    test('succeeds with status code 204 if id is valid', async () => {
-      const blogsBefore = await helper.blogsInDb()
-      const { id: idToUpdate, title } = blogsBefore[0]
+    await api
+      .post(endpointTested)
+      .send(newBlog)
+      .expect(401)
+      .expect('Content-Type', /application\/json/)
 
-      await api
-        .delete(endpointTested + '/' + idToUpdate)
-        .expect(204)
-
-      const blogsAfter = await helper.blogsInDb()
-      assert(!blogsAfter.map(blog => blog.title).includes(title))
-
-      assert.strictEqual(blogsBefore.length - 1, blogsAfter.length)
-    })
-
-    test('fails with status code 404 if id is not sent', async () => {
-      await api
-        .delete(endpointTested + '/')
-        .expect(404)
-    })
+    const blogsList = await blogsInDb()
+    assert.strictEqual(blogsList.length, listOfBlogs.length)
   })
 
-  describe('modification of blog', async () => {
-    test('update succeeds and adds 5 likes to a blog', async () => {
-      const blogsBefore = await helper.blogsInDb()
-      const { id: idToUpdate, likes: likesBefore } = blogsBefore[0]
-      const likes = likesBefore + 5
+})
 
-      await api
-        .patch(endpointTested + '/' + idToUpdate)
-        .send({ likes })
-        .expect(200)
+describe('deletion of blogs', async () => {
+  beforeEach(getSessionToken)
 
-      const blogsAfter = await helper.blogsInDb()
-      const blogUpdated = blogsAfter.filter(blog => blog.id === idToUpdate).at(0)
-      assert.strictEqual(blogUpdated.likes, likes)
-    })
+  test('succeeds with status code 204 if id is valid', async () => {
+    const blogsBefore = await blogsInDb()
 
-    test('not updated if id is not sent', async () => {
-      await api
-        .patch(endpointTested + '/')
-        .expect(404)
-    })
+    const { id, title } = blogsBefore[0]
+
+    await api
+      .delete(endpointTested + '/' + id)
+      .auth(sessionToken, { type: 'bearer' })
+      .expect(204)
+
+    const blogsAfter = await blogsInDb()
+    assert(!blogsAfter.map(blog => blog.title).includes(title))
+
+    assert.strictEqual(blogsBefore.length - 1, blogsAfter.length)
   })
+
+  test('fails with status code 404 if id is not sent', async () => {
+    await api
+      .delete(endpointTested + '/')
+      .auth(sessionToken, { type: 'bearer' })
+      .expect(404)
+  })
+})
+
+
+
+describe('modification of blogs', async () => {
+  test('update succeeds and adds 5 likes to a blog', async () => {
+    const blogsBefore = await blogsInDb()
+    const { id: idToUpdate, likes: likesBefore } = blogsBefore[0]
+    const likes = likesBefore + 5
+
+    await api
+      .patch(endpointTested + '/' + idToUpdate)
+      .send({ likes })
+      .expect(200)
+
+    const blogsAfter = await blogsInDb()
+    const blogUpdated = blogsAfter.filter(blog => blog.id === idToUpdate).at(0)
+    assert.strictEqual(blogUpdated.likes, likes)
+  })
+
+  test('not updated if id is not sent', async () => {
+    await api
+      .patch(endpointTested + '/')
+      .expect(404)
+  })
+
 })
 
 after(async () => {
