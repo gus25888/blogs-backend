@@ -26,6 +26,12 @@ app.use(requestLogger)
 app.use('/api/login', loginRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/blogs', userExtractor, blogsRouter)
+
+if (process.env.NODE_ENV === 'testing') {
+  const resetRouter = require('./controllers/reset')
+  app.use('/api/reset', resetRouter)
+}
+
 app.use(unknownEndpoint)
 app.use(errorHandler)
 
